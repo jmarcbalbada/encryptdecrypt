@@ -2,6 +2,8 @@
 
 This Windows Forms application allows you to encrypt and decrypt files using AES (Advanced Encryption Standard) with a secure key. You can load files, encrypt or decrypt them, and save the results.
 
+[Download the .exe file](https://drive.google.com/file/d/19b13Geo3jX4QLruS-hSNL78lane7Bk48/view?usp=sharing)
+
 ## Features
 - AES Encryption: Encrypt files securely using AES with a 32-byte key.
 - AES Decryption: Decrypt previously encrypted files back to their original state.
