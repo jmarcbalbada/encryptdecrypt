@@ -177,5 +177,10 @@ namespace BalbadaFileEncryptDecrypt
 
         private string EncryptPlayfair(string text, string key) => ProcessPlayfair(text, true, key);
         private string DecryptPlayfair(string text, string key) => ProcessPlayfair(text, false, key);
+
+        private void Form1_Load(object sender, EventArgs e)
+        {
+
+        }
     }
 }
