@@ -14,8 +14,8 @@ namespace BalbadaFileEncryptDecrypt
 {
     public partial class Form1 : Form
     {
-        // api key, for more secure we can add it to .env or windows manager, but for demo we hardcode it here
-        private static string SecretKey = "x-balbada-47GjX9tLzQk82mYF6Cdw5P"; 
+        // Playfair cipher key
+        private static string SecretKey = "BALBADAFILE";
 
         public Form1()
         {
@@ -29,7 +29,7 @@ namespace BalbadaFileEncryptDecrypt
             bool isEncrypted = EncryptFile(filePath);
             if (isEncrypted)
             {
-               MessageBox.Show($"File encrypted: {filePath}.enc", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show($"File encrypted: {filePath}.enc", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
@@ -39,7 +39,7 @@ namespace BalbadaFileEncryptDecrypt
             bool isDecrypted = DecryptFile(filePath);
             if (isDecrypted)
             {
-               MessageBox.Show($"File decrypted: {filePath.Replace(".enc", "")}", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show($"File decrypted: {filePath.Replace(".enc", "")}", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
@@ -53,91 +53,129 @@ namespace BalbadaFileEncryptDecrypt
             openFileDialog2.ShowDialog();
         }
 
-        // encrypt uses AES
         private bool EncryptFile(string filePath)
         {
             try
             {
-                byte[] keyBytes = Encoding.UTF8.GetBytes(SecretKey);
-                byte[] iv = new byte[16];
-                using (RandomNumberGenerator rng = RandomNumberGenerator.Create())
-                {
-                    rng.GetBytes(iv);
-                }
-
-                using (Aes aes = Aes.Create())
-                {
-                    aes.Key = keyBytes;
-                    aes.IV = iv;
-                    aes.Mode = CipherMode.CBC;
-                    aes.Padding = PaddingMode.PKCS7;
-
-                    using (FileStream fs = new FileStream(filePath + ".enc", FileMode.Create))
-                    {
-                        fs.Write(iv, 0, iv.Length); 
-
-                        using (CryptoStream cs = new CryptoStream(fs, aes.CreateEncryptor(), CryptoStreamMode.Write))
-                        using (FileStream fsInput = new FileStream(filePath, FileMode.Open, FileAccess.Read))
-                        {
-                            fsInput.CopyTo(cs);
-                        }
-                    }
-                }
-
-                // delete the file after encrypting
+                string plaintext = File.ReadAllText(filePath);
+                string encryptedText = EncryptPlayfair(plaintext, SecretKey);
+                File.WriteAllText(filePath + ".enc", encryptedText);
                 File.Delete(filePath);
                 return true;
             }
-            catch(Exception err)
+            catch (Exception err)
             {
                 Console.WriteLine(err.ToString());
-                MessageBox.Show("Something went wrong!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("Encryption failed!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
-            
         }
 
-        // decrypt, encryptApi == decryptApi
         private bool DecryptFile(string filePath)
         {
             try
             {
-                byte[] keyBytes = Encoding.UTF8.GetBytes(SecretKey);
-
-                using (FileStream fsInput = new FileStream(filePath, FileMode.Open, FileAccess.Read))
-                {
-                    byte[] iv = new byte[16];
-                    fsInput.Read(iv, 0, iv.Length);
-
-                    using (Aes aes = Aes.Create())
-                    {
-                        aes.Key = keyBytes;
-                        aes.IV = iv;
-                        aes.Mode = CipherMode.CBC;
-                        aes.Padding = PaddingMode.PKCS7;
-
-                        using (CryptoStream cs = new CryptoStream(fsInput, aes.CreateDecryptor(), CryptoStreamMode.Read))
-
-                        // revert to non .enc or orig file ext
-                        using (FileStream fsOutput = new FileStream(filePath.Replace(".enc", ""), FileMode.Create))
-                        {
-                            cs.CopyTo(fsOutput);
-                        }
-                    }
-                }
-
-                // delete the enc file after decrypting
+                string encryptedText = File.ReadAllText(filePath);
+                string decryptedText = DecryptPlayfair(encryptedText, SecretKey);
+                File.WriteAllText(filePath.Replace(".enc", ""), decryptedText);
                 File.Delete(filePath);
                 return true;
-
             }
-            catch(Exception err)
+            catch (Exception err)
             {
                 Console.WriteLine(err.ToString());
-                MessageBox.Show("Invalid API key!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("Decryption failed!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
-
         }
+
+        private char[,] GeneratePlayfairMatrix(string key)
+        {
+            key = new string(key.ToUpper().Distinct().ToArray()).Replace("J", "I");
+            string alphabet = "ABCDEFGHIKLMNOPQRSTUVWXYZ";
+            string fullKey = key + new string(alphabet.Where(c => !key.Contains(c)).ToArray());
+
+            char[,] matrix = new char[5, 5];
+            int index = 0;
+            for (int row = 0; row < 5; row++)
+            {
+                for (int col = 0; col < 5; col++)
+                {
+                    matrix[row, col] = fullKey[index++];
+                }
+            }
+            return matrix;
+        }
+
+        private (int, int) FindPosition(char[,] matrix, char letter)
+        {
+            if (letter == 'J') letter = 'I';
+            for (int row = 0; row < 5; row++)
+            {
+                for (int col = 0; col < 5; col++)
+                {
+                    if (matrix[row, col] == letter)
+                        return (row, col);
+                }
+            }
+            return (-1, -1);
+        }
+
+        private string PreparePlayfairInput(string text)
+        {
+            text = new string(text.ToUpper().Where(char.IsLetter).ToArray()).Replace("J", "I");
+            StringBuilder formattedText = new StringBuilder();
+
+            for (int i = 0; i < text.Length; i++)
+            {
+                formattedText.Append(text[i]);
+                if (i + 1 < text.Length && text[i] == text[i + 1])
+                {
+                    formattedText.Append('X');
+                }
+            }
+
+            if (formattedText.Length % 2 != 0)
+            {
+                formattedText.Append('X');
+            }
+
+            return formattedText.ToString();
+        }
+
+        private string ProcessPlayfair(string text, bool encrypt, string key)
+        {
+            char[,] matrix = GeneratePlayfairMatrix(key);
+            text = PreparePlayfairInput(text);
+
+            StringBuilder result = new StringBuilder();
+            for (int i = 0; i < text.Length; i += 2)
+            {
+                char a = text[i], b = text[i + 1];
+                var (row1, col1) = FindPosition(matrix, a);
+                var (row2, col2) = FindPosition(matrix, b);
+
+                if (row1 == row2)
+                {
+                    col1 = (col1 + (encrypt ? 1 : 4)) % 5;
+                    col2 = (col2 + (encrypt ? 1 : 4)) % 5;
+                }
+                else if (col1 == col2)
+                {
+                    row1 = (row1 + (encrypt ? 1 : 4)) % 5;
+                    row2 = (row2 + (encrypt ? 1 : 4)) % 5;
+                }
+                else
+                {
+                    (col1, col2) = (col2, col1);
+                }
+
+                result.Append(matrix[row1, col1]).Append(matrix[row2, col2]);
+            }
+            return result.ToString();
+        }
+
+        private string EncryptPlayfair(string text, string key) => ProcessPlayfair(text, true, key);
+        private string DecryptPlayfair(string text, string key) => ProcessPlayfair(text, false, key);
     }
 }
